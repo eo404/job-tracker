@@ -106,4 +106,123 @@ router.delete("/:id",authMiddleware,async(req,res)=>{
     }
 });
 
+router.get("/", authMiddleware, async (req, res) => {
+    try {
+        const { status, search, sort, page = 1, limit = 10 } = req.query;
+
+        
+    // Build filter
+    const filter = {
+        userId: req.user._id
+    };
+
+    if (status) {
+        filter.status = status;
+    }
+
+    if (search) {
+        filter.company = {
+            $regex: search,
+            $options: "i"
+        };
+    }
+
+    // Build sort option
+    let sortOption = {};
+
+    switch (sort) {
+        case "newest":
+            sortOption = { createdAt: -1 };
+            break;
+
+        case "oldest":
+            sortOption = { createdAt: 1 };
+            break;
+
+        case "company":
+            sortOption = { company: 1 };
+            break;
+
+        case "status":
+            sortOption = { status: 1 };
+            break;
+
+        default:
+            sortOption = { createdAt: -1 };
+    }
+
+    const currentPage = parseInt(page);
+    const pageLimit = parseInt(limit);
+    const skip = (currentPage - 1) * pageLimit;
+
+    const jobs = await Job.find(filter)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(pageLimit);
+
+    const totalJobs = await Job.countDocuments(filter);
+
+    return res.status(200).json({
+        jobs,
+        pagination: {
+            totalJobs,
+            currentPage,
+            totalPages: Math.ceil(totalJobs / pageLimit),
+            pageLimit
+        }
+    });
+
+} catch (error) {
+    return res.status(500).json({
+        message: error.message
+    });
+}
+
+
+    });
+    
+router.get("/stats", authMiddleware, async (req, res) => {
+    try {
+        const jobs = await Job.find({
+            userId: req.user._id
+        });
+
+        
+    let applied = 0;
+    let interview = 0;
+    let offer = 0;
+    let rejected = 0;
+
+    for (const job of jobs) {
+        if (job.status === "Applied") {
+            applied++;
+        } else if (job.status === "Interview") {
+            interview++;
+        } else if (job.status === "Offer") {
+            offer++;
+        } else if (job.status === "Rejected") {
+            rejected++;
+        }
+    }
+
+    return res.status(200).json({
+        Applied: applied,
+        Interview: interview,
+        Offer: offer,
+        Rejected: rejected,
+        Total: jobs.length
+    });
+
+} catch (error) {
+    return res.status(500).json({
+        message: error.message
+    });
+}
+
+
+    });
+
+
+
+
 module.exports = router
