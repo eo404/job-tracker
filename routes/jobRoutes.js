@@ -2,10 +2,33 @@ const express = require("express")
 const router = express.Router()
 
 const Job = require('../models/job')
+const authMiddleware = require("../middleware/authMiddleware")
 
-router.post("/",async(req,res)=>{
+const jobSchema = z.object({
+    company: z.string().min(2),
+    role: z.string().min(2),
+    status: z.enum(['Applied', "Interview", "Offer","Rejected"]).optional(),
+    notes: z.string().optional()
+})
+
+router.post("/", authMiddleware,async(req,res)=>{
     try{
-        const job = await Job.create(req.body)
+        const result = jobSchema.safeParse(req.body)
+        if(!result.success)
+        {
+            return res.status(400).json(
+                {
+                    message: result.error.issues
+                }
+            )
+        }
+        const job = await Job.create({
+            company: req.body.company,
+            role: req.body.role,
+            status: req.body.status,
+            notes: req.body.notes,
+            userId: req.user._id
+        })
         res.status(201).json(job)
     }catch(error)
     {
@@ -15,9 +38,11 @@ router.post("/",async(req,res)=>{
     }
 });
 
-router.get("/",async(req,res)=>{
+router.get("/",authMiddleware,async(req,res)=>{
     try{
-        const jobs = await Job.find()
+        const jobs = await Job.find({
+            userId: req.user._id
+        })
         res.status(200).json(jobs) 
     }
     catch(error){
@@ -27,16 +52,19 @@ router.get("/",async(req,res)=>{
     }
 });
 
-router.put("/:id",async(req,res)=>{
+router.put("/:id",authMiddleware,async(req,res)=>{
     const id  = req.params.id
     try
     {
-        const data = req.body
-        const job = await Job.findByIdAndUpdate(id,data,{new: true})
-        if (!job) {
-            return res.status(404).json({ message: 'Job not found' })
-        }
-        res.json(job)
+        const job = await Job.findById(id); 
+        if (!job) { return res.status(404).json({ message: "Job not found" }); }
+        if (job.userId.toString() !== req.user._id.toString()) 
+            { 
+                return res.status(403).json({ message: "Forbidden" }); 
+            
+            }
+        const updatedJob = await Job.findByIdAndUpdate(id, req.body, { new: true }); 
+        return res.status(200).json(updatedJob);
     }
     catch(error)
     {
@@ -46,26 +74,33 @@ router.put("/:id",async(req,res)=>{
     }
 });
 
-router.delete("/:id",async(req,res)=>{
+router.delete("/:id",authMiddleware,async(req,res)=>{
     const id = req.params.id
     try
     {
-        const job = await Job.findByIdAndDelete(id)
-        if (job) {
-            return res.json({
-                "message": "Job deleted"
-            })
-        }
-        else
+        const job = await Job.findById(id)
+        if(!job)
         {
             return res.status(404).json({
-                "message": "Job Not found"
+                message:"Job Not Found"
             })
         }
+        if(job.userId.toString()!==req.user._id)
+        {
+            return res.status(403).json(
+                {message:"Forbidden"}
+            )
+        }
+        const delJob = await Job.findByIdAndDelete(id);
+        return res.status(200).json(
+            {
+                'message':"Job deleted successfully"
+            }
+        )
     }
     catch(error)
     {
-        res.status(404).json({
+        res.status(500).json({
             "message": error.message
         })
     }

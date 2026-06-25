@@ -2,12 +2,14 @@ const express = require("express");
 const mongoose =  require("mongoose");
 const dotenv = require("dotenv");
 const jobRoutes = require("./routes/jobRoutes")
+const authRoutes = require("./routes/authRoutes")
 
 dotenv.config();
 const app = express();
 
 app.use(express.json())
 app.use('/api/jobs',jobRoutes)
+app.use('/api/auth',authRoutes)
 
 app.get('/',(req,res)=>{
     res.send("API is Running....")
